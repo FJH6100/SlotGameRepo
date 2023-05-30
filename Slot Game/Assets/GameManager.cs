@@ -4,15 +4,27 @@ using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
-    public int boardHeight, boardWidth;
-    public Text scoreText;
-    public GameObject[] gamePieces;
+    [SerializeField]
+    [Range(3, 5)]
+    private int boardHeight;
+
+    [SerializeField]
+    [Range(3, 7)]
+    private int boardWidth;
+
+    [SerializeField]
+    private Text scoreText;
+    [SerializeField]
+    private GameObject[] gamePieces;
+    [SerializeField]
+    private GameObject slot;
+
     private AudioSource _audio;
     private GameObject[,] _gameBoard;
     private GameObject _board;
     private List<GameObject> _matchLines;
     private int _score = 0;
-    Vector3 offset = new Vector3(0, 0, -1);
+    private Vector3 _offset = new Vector3(0, 0, -1);
     // Start is called before the first frame update
     void Start()
     {
@@ -20,6 +32,22 @@ public class GameManager : MonoBehaviour
         _board = GameObject.Find("GameBoard");
         _gameBoard = new GameObject[boardHeight, boardWidth];
         _matchLines = new List<GameObject>();
+        int heightLimit = boardHeight - 1;
+        int widthLimit = boardWidth - 1;
+        int heightIndex = 0;
+        int widthIndex = 0;
+        for (int i = heightLimit; i >= -heightLimit; i -= 2)
+        {
+            for (int j = -widthLimit; j <= widthLimit; j += 2)
+            {
+                GameObject thisSlot = Instantiate(slot, new Vector3(j, i, 0), Quaternion.identity);
+                thisSlot.name = heightIndex + " " + widthIndex;
+                thisSlot.transform.parent = _board.transform;
+                widthIndex++;
+            }
+            heightIndex++;
+            widthIndex = 0;
+        }
     }
 
     public void Spin()
@@ -44,7 +72,7 @@ public class GameManager : MonoBehaviour
                     Destroy(destroyPiece);
                 }
                 GameObject pieceType = gamePieces[Random.Range(0, gamePieces.Length)];
-                GameObject thisPiece = Instantiate(pieceType, gridPosition.transform.position + offset, Quaternion.identity);
+                GameObject thisPiece = Instantiate(pieceType, gridPosition.transform.position + _offset, Quaternion.identity);
                 thisPiece.name = pieceType.name;
                 thisPiece.transform.parent = gridPosition.transform;
                 _gameBoard[i, j] = thisPiece;
@@ -58,15 +86,32 @@ public class GameManager : MonoBehaviour
         //Vertical Matches
         for (int i = 0; i < boardWidth; i++)
         {
-            for (int j = 1; j < boardHeight; j++)
+            int matchLength = 1;
+            GameObject matchBegin = _gameBoard[0, i];
+            GameObject matchEnd = null;
+            for (int j = 0; j < boardHeight - 1; j++)
             {
-                if (_gameBoard[j, i].name != _gameBoard[j - 1, i].name)
-                    break;
-                if (j == boardHeight - 1)
+                if (_gameBoard[j, i].name == _gameBoard[j + 1, i].name)
                 {
-                    _score += 10;                   
-                    DrawLine(_gameBoard[0, i].transform.position + offset, _gameBoard[boardHeight - 1, i].transform.position + offset);
+                    matchLength++;
                 }
+                else
+                {
+                    if (matchLength >= 3)
+                    {
+                        matchEnd = _gameBoard[j, i];
+                        _score += 10 * (matchLength - 2);
+                        DrawLine(matchBegin.transform.position + _offset, matchEnd.transform.position + _offset);
+                    }
+                    matchBegin = _gameBoard[j + 1, i];
+                    matchLength = 1;
+                }
+            }
+            if (matchLength >= 3)
+            {
+                matchEnd = _gameBoard[boardHeight - 1, i];
+                _score += 10 * (matchLength - 2);
+                DrawLine(matchBegin.transform.position + _offset, matchEnd.transform.position + _offset);
             }
         }
         //Horizontal Matches
@@ -87,60 +132,63 @@ public class GameManager : MonoBehaviour
                     {
                         matchEnd = _gameBoard[i, j];
                         _score += 10 * (matchLength - 2);
-                        DrawLine(matchBegin.transform.position + offset, matchEnd.transform.position + offset);
+                        DrawLine(matchBegin.transform.position + _offset, matchEnd.transform.position + _offset);
                     }
                     matchBegin = _gameBoard[i, j + 1];
                     matchLength = 1;
-                }    
+                }
             }
             if (matchLength >= 3)
             {
                 matchEnd = _gameBoard[i, boardWidth - 1];
                 _score += 10 * (matchLength - 2);
-                DrawLine(matchBegin.transform.position + offset, matchEnd.transform.position + offset);
+                DrawLine(matchBegin.transform.position + _offset, matchEnd.transform.position + _offset);
             }
         }
-        //Five in a row
-        List<GameObject> points = new List<GameObject>();
-        List<string> names = new List<string>();
-        for (int i = 0; i < boardHeight; i++)
+        //X in a row/only if width is greater than 3
+        if (boardWidth > 3)
         {
-            points.Clear();
-            GameObject startPoint = _gameBoard[i, 0];
-            if (names.Contains(startPoint.name))
-                continue;
-            else
-                names.Add(startPoint.name);
-            points.Add(startPoint);
-            for (int j = 1; j < boardWidth; j++)
+            List<GameObject> points = new List<GameObject>();
+            List<string> names = new List<string>();
+            for (int i = 0; i < boardHeight; i++)
             {
-                bool notFound = false;
-                for (int k = 0; k < boardHeight; k++)
+                points.Clear();
+                GameObject startPoint = _gameBoard[i, 0];
+                if (names.Contains(startPoint.name))
+                    continue;
+                else
+                    names.Add(startPoint.name);
+                points.Add(startPoint);
+                for (int j = 1; j < boardWidth; j++)
                 {
-                    if (startPoint.name == _gameBoard[k, j].name)
+                    bool notFound = false;
+                    for (int k = 0; k < boardHeight; k++)
                     {
-                        points.Add(_gameBoard[k, j]);
-                        break;
+                        if (startPoint.name == _gameBoard[k, j].name)
+                        {
+                            points.Add(_gameBoard[k, j]);
+                            break;
+                        }
+                        if (k == boardHeight - 1)
+                            notFound = true;
                     }
-                    if (k == boardHeight - 1)
-                        notFound = true;
+                    if (notFound)
+                        break;
                 }
-                if (notFound)
-                    break;
-            }
-            if (points.Count == boardWidth)
-            {
-                GameObject myLine = new GameObject();
-                myLine.transform.position = startPoint.transform.position + offset;
-                myLine.AddComponent<LineRenderer>();
-                LineRenderer lr = myLine.GetComponent<LineRenderer>();
-                lr.positionCount = boardWidth;
-                lr.startWidth = .1f;
-                lr.endWidth = .1f;
-                for (int a = 0; a < points.Count; a++)
-                    lr.SetPosition(a, points[a].transform.position + offset);
-                _matchLines.Add(myLine);
-                _score += 50;
+                if (points.Count == boardWidth)
+                {
+                    GameObject myLine = new GameObject();
+                    myLine.transform.position = startPoint.transform.position + _offset;
+                    myLine.AddComponent<LineRenderer>();
+                    LineRenderer lr = myLine.GetComponent<LineRenderer>();
+                    lr.positionCount = boardWidth;
+                    lr.startWidth = .1f;
+                    lr.endWidth = .1f;
+                    for (int a = 0; a < points.Count; a++)
+                        lr.SetPosition(a, points[a].transform.position + _offset);
+                    _matchLines.Add(myLine);
+                    _score += boardWidth * 10;
+                }
             }
         }
         scoreText.text = _score.ToString();
